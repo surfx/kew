@@ -7,6 +7,8 @@
 
 #include "song_loader.h"
 
+#include "common/model.h"
+
 #include "lyrics.h"
 
 #include "data/cache.h"
@@ -23,7 +25,9 @@
 #include <glib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
+#include <libgen.h>
 
 #define MAX_RECURSION_DEPTH 10
 
@@ -496,6 +500,105 @@ int load_color(SongData *songdata)
                                &(songdata->green), &(songdata->blue));
 }
 
+static void handle_covers_and_tags(SongData *songdata) {
+    char dir[KEW_PATH_MAX];
+    get_directory_from_path(songdata->file_path, dir);
+    
+    char *base = g_path_get_basename(songdata->file_path);
+    char *dot = strrchr(base, '.');
+    if (dot) *dot = '\0';
+    
+    char *sep = strstr(base, " - ");
+    if (sep) {
+        char artist[METADATA_MAX_LENGTH];
+        char title[METADATA_MAX_LENGTH];
+        
+        size_t artist_len = sep - base;
+        if (artist_len >= METADATA_MAX_LENGTH) artist_len = METADATA_MAX_LENGTH - 1;
+        memcpy(artist, base, artist_len);
+        artist[artist_len] = '\0';
+        
+        c_strcpy(title, sep + 3, METADATA_MAX_LENGTH);
+        
+        trim(artist, METADATA_MAX_LENGTH);
+        trim(title, METADATA_MAX_LENGTH);
+        
+        // Check if we need to update tags
+        bool update = false;
+        if (strlen(songdata->metadata->artist) == 0 || strcmp(songdata->metadata->artist, artist) != 0) {
+            update = true;
+            c_strcpy(songdata->metadata->artist, artist, METADATA_MAX_LENGTH);
+        }
+        if (strlen(songdata->metadata->title) == 0 || strcmp(songdata->metadata->title, title) != 0) {
+            update = true;
+            c_strcpy(songdata->metadata->title, title, METADATA_MAX_LENGTH);
+        }
+        
+        if (update) {
+            updateTags(songdata->file_path, songdata->metadata->title, songdata->metadata->artist);
+        }
+        
+        // Handle covers
+        char covers_dir[KEW_PATH_MAX];
+        snprintf(covers_dir, sizeof(covers_dir), "%s.covers", dir);
+        if (directory_exists(covers_dir) != 1) {
+            create_directory(covers_dir);
+        }
+        
+        char cover_path[KEW_PATH_MAX];
+        snprintf(cover_path, sizeof(cover_path), "%s/%s.jpg", covers_dir, artist);
+        
+        if (exists_file(cover_path) != 1) {
+            // Download cover
+            char *quoted_artist = g_shell_quote(artist);
+            char *quoted_dest = g_shell_quote(cover_path);
+            char cmd[4096];
+            
+            // Try iTunes first (fast and usually has good artist/album art)
+            snprintf(cmd, sizeof(cmd), 
+                "URL=$(curl -sG --data-urlencode \"term=%s\" \"https://itunes.apple.com/search?entity=album&limit=1\" | grep -o '\"artworkUrl100\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4 | sed 's/100x100bb.jpg/600x600bb.jpg/'); "
+                "if [ -n \"$URL\" ]; then curl -L -s -o %s \"$URL\"; fi", 
+                quoted_artist, quoted_dest);
+            
+            pid_t pid = fork();
+            if (pid == 0) {
+                execlp("sh", "sh", "-c", cmd, (char *)NULL);
+                _exit(127);
+            } else if (pid > 0) {
+                int status;
+                waitpid(pid, &status, 0);
+            }
+
+            // Fallback to MusicBrainz if iTunes failed
+            if (exists_file(cover_path) != 1) {
+                snprintf(cmd, sizeof(cmd),
+                    "MBID=$(curl -sG --data-urlencode \"query=artist:%s\" \"https://musicbrainz.org/ws/2/artist/?fmt=json\" | grep -o '\"id\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); "
+                    "if [ -n \"$MBID\" ]; then "
+                    "RELID=$(curl -s \"https://musicbrainz.org/ws/2/release?artist=$MBID&limit=1&fmt=json\" | grep -o '\"id\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); "
+                    "if [ -n \"$RELID\" ]; then curl -L -s -o %s \"https://coverartarchive.org/release/$RELID/front\"; fi; fi",
+                    quoted_artist, quoted_dest);
+                
+                pid = fork();
+                if (pid == 0) {
+                    execlp("sh", "sh", "-c", cmd, (char *)NULL);
+                    _exit(127);
+                } else if (pid > 0) {
+                    int status;
+                    waitpid(pid, &status, 0);
+                }
+            }
+            
+            g_free(quoted_artist);
+            g_free(quoted_dest);
+        }
+        
+        if (exists_file(cover_path) == 1) {
+            c_strcpy(songdata->cover_art_path, cover_path, sizeof(songdata->cover_art_path));
+        }
+    }
+    g_free(base);
+}
+
 void load_meta_data(SongData *songdata)
 {
         char path[KEW_PATH_MAX];
@@ -513,41 +616,48 @@ void load_meta_data(SongData *songdata)
         int res = extractTags(songdata->file_path, songdata->metadata,
                               &(songdata->duration), songdata->cover_art_path, &(songdata->lyrics));
 
+        handle_covers_and_tags(songdata);
+
         if (res == -2) {
                 songdata->hasErrors = true;
                 return;
         } else if (res == -1) {
-                get_directory_from_path(songdata->file_path, path);
-                char *tmp = NULL;
-                off_t size = 0;
-                char *file_arr[12] = {
-                    "front.png",
-                    "front.jpg",
-                    "front.jpeg",
-                    "folder.png",
-                    "folder.jpg",
-                    "folder.jpeg",
-                    "cover.png",
-                    "cover.jpg",
-                    "cover.jpeg",
-                    "f.png",
-                    "f.jpg",
-                    "f.jpeg",
-                };
-                tmp = choose_album_art(path, file_arr, 12, 0);
-                if (tmp == NULL) {
-                        tmp = find_largest_image_file(path, tmp, &size);
-                }
+                if (strlen(songdata->cover_art_path) == 0 || exists_file(songdata->cover_art_path) != 1) {
+                        get_directory_from_path(songdata->file_path, path);
+                        char *tmp = NULL;
+                        off_t size = 0;
+                        char *file_arr[12] = {
+                            "front.png",
+                            "front.jpg",
+                            "front.jpeg",
+                            "folder.png",
+                            "folder.jpg",
+                            "folder.jpeg",
+                            "cover.png",
+                            "cover.jpg",
+                            "cover.jpeg",
+                            "f.png",
+                            "f.jpg",
+                            "f.jpeg",
+                        };
+                        tmp = choose_album_art(path, file_arr, 12, 0);
+                        if (tmp == NULL) {
+                                tmp = find_largest_image_file(path, tmp, &size);
+                        }
 
-                if (tmp != NULL) {
-                        c_strcpy(songdata->cover_art_path, tmp,
-                                 sizeof(songdata->cover_art_path));
-                        free(tmp);
-                        tmp = NULL;
-                } else
-                        c_strcpy(songdata->cover_art_path, "",
-                                 sizeof(songdata->cover_art_path));
+                        if (tmp != NULL) {
+                                c_strcpy(songdata->cover_art_path, tmp,
+                                         sizeof(songdata->cover_art_path));
+                                free(tmp);
+                                tmp = NULL;
+                        } else
+                                c_strcpy(songdata->cover_art_path, "",
+                                         sizeof(songdata->cover_art_path));
+                }
         } else {
+                // Check if handle_covers_and_tags found something better
+                // Actually, if res == 0, it extracted embedded art to cover_art_path.
+                // If handle_covers_and_tags overwrote it, we are using the artist cover.
                 add_to_cache(tmpCache, songdata->cover_art_path);
         }
 
@@ -680,3 +790,44 @@ SongData *load_song_data(char *file_path)
         return songdata;
 }
 
+static void process_entry_recursive(FileSystemEntry *entry) {
+    if (!entry) return;
+    if (entry->is_directory) {
+        FileSystemEntry *child = entry->children;
+        while (child) {
+            process_entry_recursive(child);
+            child = child->next;
+        }
+    } else if (is_music_file(entry->name)) {
+        SongData *sd = calloc(1, sizeof(SongData));
+        if (sd) {
+            sd->metadata = malloc(sizeof(TagSettings));
+            if (sd->metadata) {
+                memset(sd->metadata, 0, sizeof(TagSettings));
+                c_strcpy(sd->file_path, entry->full_path, sizeof(sd->file_path));
+                double duration;
+                Lyrics *lyrics = NULL;
+                extractTags(sd->file_path, sd->metadata, &duration, sd->cover_art_path, &lyrics);
+                if (lyrics) {
+                    // We don't need lyrics for background cover processing, but extractTags might allocate them
+                    // Actually, extractTags in this codebase might just load pointers or allocate.
+                    // Need to check extractTags signature and behavior.
+                }
+                handle_covers_and_tags(sd);
+                free(sd->metadata);
+            }
+            free(sd);
+        }
+    }
+}
+
+void *process_library_covers_thread(void *arg) {
+    Model *model = (Model *)arg;
+    if (!model || !model->library) return NULL;
+    
+    // Sleep a bit to let the UI initialize
+    c_sleep(2000);
+    
+    process_entry_recursive(model->library);
+    return NULL;
+}

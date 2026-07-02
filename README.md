@@ -14,9 +14,31 @@
 
 [![License](https://img.shields.io/github/license/ravachol/kew?color=333333&style=for-the-badge)](./LICENSE)
 <br>
-**English** | [简体中文](README_zh_CN.md)
-<br>
-<br>
+**English** | [简体中文](README_zh_CN.md) | **Português (Brasil)**
+
+---
+
+### 🇧🇷 Novidades desta Versão (Customizada)
+
+Adicionado o download de covers
+
+![](images/kew_covers.png)
+
+Pasta `.covers`
+
+![](images/covers.png)
+
+Esta versão do **kew** inclui melhorias exclusivas para gestão automatizada de biblioteca:
+
+*   **Download Automático de Capas**: Ao iniciar, o player busca capas de artistas via iTunes API e MusicBrainz (Cover Art Archive).
+*   **Pasta `.covers` Centralizada**: As imagens são salvas em uma pasta oculta `.covers` no diretório das músicas, evitando poluição visual.
+*   **Tagging Automático**: O player corrige as tags de Artista e Título baseando-se no nome do arquivo (padrão `Artista - Música.mp3`).
+*   **Escaneamento em Segundo Plano**: O processamento de capas e tags ocorre de forma assíncrona na inicialização, sem travar a interface.
+*   **Scripts de Automação**: Inclui scripts em `./scripts/` para facilitar o build (`build.sh`), execução (`run.sh`) e encerramento do processo (`kill.sh`).
+
+**ps**: Realiza o download da arte por artista, e não por álbum. Talvez melhore isso em uma atualização futura.
+
+---
 
 kew (/kjuː/ - variant of cue) is a terminal music player.
 

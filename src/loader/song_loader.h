@@ -5,6 +5,9 @@
  * Responsible for loading song data from file
  */
 
+#ifndef SONG_LOADER_H
+#define SONG_LOADER_H
+
 #include "songdatatype.h"
 
 #include "common/path_max.h"
@@ -178,3 +181,10 @@ void song_loader_assign_slot_A(SongData *songdata);
  *       or replaced depending on internal loader state.
  */
 void song_loader_assign_slot_B(SongData *songdata);
+
+/**
+ * @brief Recursively processes the library tree for covers and tags in a background thread.
+ */
+void *process_library_covers_thread(void *arg);
+
+#endif

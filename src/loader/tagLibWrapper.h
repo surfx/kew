@@ -58,6 +58,17 @@ int extractTags(const char *input_file, TagSettings *tag_settings,
                 double *duration, const char *cover_file_path, Lyrics **lyrics);
 
 /*
+ * @brief Updates metadata tags (title and artist) of an audio file.
+ *
+ * @param input_file Path to the audio file.
+ * @param title The new title to set.
+ * @param artist The new artist to set.
+ *
+ * @return 0 if successful, -1 if failed.
+ */
+int updateTags(const char *input_file, const char *title, const char *artist);
+
+/*
  * @brief Extracts disc and track number from tags
  *
  * @param filepath full file path

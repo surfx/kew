@@ -39,3 +39,4 @@ tags
 compile_commands.json
 debug.log
 .github/workflows/release-windows-manual.yml
+ia_001/

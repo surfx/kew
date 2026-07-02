@@ -680,6 +680,10 @@ void kew_init(bool set_library_enqueued_status)
 
         if (create_sound_system() == -1)
                 quit();
+
+        pthread_t scan_tid;
+        pthread_create(&scan_tid, NULL, process_library_covers_thread, model);
+        pthread_detach(scan_tid);
 }
 
 /**

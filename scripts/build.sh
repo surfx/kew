@@ -1,0 +1,5 @@
+#!/bin/bash
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+ROOT_DIR=$(dirname "$SCRIPT_DIR")
+"$SCRIPT_DIR/kill.sh"
+cd "$ROOT_DIR" && make

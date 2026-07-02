@@ -1462,6 +1462,38 @@ void getTrackInfo(const char *filepath, uint32_t *track, uint32_t *disc)
         return;
 }
 
+int updateTags(const char *input_file, const char *title, const char *artist)
+{
+#ifdef _WIN32
+        std::wstring wpath = utf8ToWide(input_file);
+        TagLib::FileRef f(wpath.c_str());
+#else
+        TagLib::FileRef f(input_file);
+#endif
+
+        if (f.isNull() || !f.file()) {
+                return -1;
+        }
+
+        TagLib::Tag *tag = f.tag();
+        if (!tag) {
+                return -1;
+        }
+
+        if (title && strlen(title) > 0) {
+                tag->setTitle(TagLib::String(title, TagLib::String::UTF8));
+        }
+        if (artist && strlen(artist) > 0) {
+                tag->setArtist(TagLib::String(artist, TagLib::String::UTF8));
+        }
+
+        if (f.save()) {
+                return 0;
+        }
+
+        return -1;
+}
+
 int extractTags(const char *input_file, TagSettings *tag_settings,
                 double *duration, const char *coverFilePath, Lyrics **lyrics)
 {
