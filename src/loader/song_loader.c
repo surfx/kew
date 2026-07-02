@@ -7,6 +7,7 @@
 
 #include "song_loader.h"
 
+#include "common/appstate.h"
 #include "common/model.h"
 
 #include "lyrics.h"
@@ -504,15 +505,15 @@ static void handle_covers_and_tags(SongData *songdata) {
     char dir[KEW_PATH_MAX];
     get_directory_from_path(songdata->file_path, dir);
     
+    char artist[METADATA_MAX_LENGTH] = {0};
+    char title[METADATA_MAX_LENGTH] = {0};
+
     char *base = g_path_get_basename(songdata->file_path);
     char *dot = strrchr(base, '.');
     if (dot) *dot = '\0';
     
     char *sep = strstr(base, " - ");
     if (sep) {
-        char artist[METADATA_MAX_LENGTH];
-        char title[METADATA_MAX_LENGTH];
-        
         size_t artist_len = sep - base;
         if (artist_len >= METADATA_MAX_LENGTH) artist_len = METADATA_MAX_LENGTH - 1;
         memcpy(artist, base, artist_len);
@@ -537,48 +538,82 @@ static void handle_covers_and_tags(SongData *songdata) {
         if (update) {
             updateTags(songdata->file_path, songdata->metadata->title, songdata->metadata->artist);
         }
-        
+    } else if (songdata->metadata && strlen(songdata->metadata->artist) > 0) {
+        c_strcpy(artist, songdata->metadata->artist, METADATA_MAX_LENGTH);
+        c_strcpy(title, songdata->metadata->title, METADATA_MAX_LENGTH);
+    }
+    
+    if (strlen(artist) > 0) {
         // Handle covers
         char covers_dir[KEW_PATH_MAX];
-        snprintf(covers_dir, sizeof(covers_dir), "%s.covers", dir);
-        if (directory_exists(covers_dir) != 1) {
-            create_directory(covers_dir);
-        }
-        
         char cover_path[KEW_PATH_MAX];
-        snprintf(cover_path, sizeof(cover_path), "%s/%s.jpg", covers_dir, artist);
-        
-        if (exists_file(cover_path) != 1) {
-            // Download cover
-            char *quoted_artist = g_shell_quote(artist);
-            char *quoted_dest = g_shell_quote(cover_path);
-            char cmd[4096];
+        bool found = false;
+
+        // 1. Try centralized .covers in library root
+        AppSettings *settings = get_app_settings();
+        if (settings && strlen(settings->path) > 0) {
+            char lib_root[KEW_PATH_MAX];
+            expand_path(settings->path, lib_root, KEW_PATH_MAX);
             
-            // Try iTunes first (fast and usually has good artist/album art)
-            snprintf(cmd, sizeof(cmd), 
-                "URL=$(curl -sG --data-urlencode \"term=%s\" \"https://itunes.apple.com/search?entity=album&limit=1\" | grep -o '\"artworkUrl100\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4 | sed 's/100x100bb.jpg/600x600bb.jpg/'); "
-                "if [ -n \"$URL\" ]; then curl -L -s -o %s \"$URL\"; fi", 
-                quoted_artist, quoted_dest);
-            
-            pid_t pid = fork();
-            if (pid == 0) {
-                execlp("sh", "sh", "-c", cmd, (char *)NULL);
-                _exit(127);
-            } else if (pid > 0) {
-                int status;
-                waitpid(pid, &status, 0);
+            // Ensure trailing slash
+            size_t root_len = strlen(lib_root);
+            if (root_len > 0 && lib_root[root_len-1] != '/' && root_len + 1 < KEW_PATH_MAX) {
+                lib_root[root_len] = '/';
+                lib_root[root_len+1] = '\0';
             }
 
-            // Fallback to MusicBrainz if iTunes failed
+            snprintf(covers_dir, sizeof(covers_dir), "%s.covers", lib_root);
+            snprintf(cover_path, sizeof(cover_path), "%s/%s.jpg", covers_dir, artist);
+            if (exists_file(cover_path) == 1) found = true;
+        }
+
+        // 2. Try .covers in project root (CWD)
+        if (!found) {
+            snprintf(covers_dir, sizeof(covers_dir), "./.covers");
+            snprintf(cover_path, sizeof(cover_path), "%s/%s.jpg", covers_dir, artist);
+            if (exists_file(cover_path) == 1) found = true;
+        }
+
+        // 3. Try local .covers
+        if (!found) {
+            snprintf(covers_dir, sizeof(covers_dir), "%s.covers", dir);
+            snprintf(cover_path, sizeof(cover_path), "%s/%s.jpg", covers_dir, artist);
+            if (exists_file(cover_path) == 1) found = true;
+        }
+
+        if (!found) {
+            // Download cover
+            // Prefer centralized if library root is known
+            if (settings && strlen(settings->path) > 0) {
+                char lib_root[KEW_PATH_MAX];
+                expand_path(settings->path, lib_root, KEW_PATH_MAX);
+                size_t root_len = strlen(lib_root);
+                if (root_len > 0 && lib_root[root_len-1] != '/' && root_len + 1 < KEW_PATH_MAX) {
+                    lib_root[root_len] = '/';
+                    lib_root[root_len+1] = '\0';
+                }
+                snprintf(covers_dir, sizeof(covers_dir), "%s.covers", lib_root);
+            } else {
+                snprintf(covers_dir, sizeof(covers_dir), "%s.covers", dir);
+            }
+
+            if (directory_exists(covers_dir) != 1) {
+                create_directory(covers_dir);
+            }
+            
+            snprintf(cover_path, sizeof(cover_path), "%s/%s.jpg", covers_dir, artist);
+            
             if (exists_file(cover_path) != 1) {
-                snprintf(cmd, sizeof(cmd),
-                    "MBID=$(curl -sG --data-urlencode \"query=artist:%s\" \"https://musicbrainz.org/ws/2/artist/?fmt=json\" | grep -o '\"id\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); "
-                    "if [ -n \"$MBID\" ]; then "
-                    "RELID=$(curl -s \"https://musicbrainz.org/ws/2/release?artist=$MBID&limit=1&fmt=json\" | grep -o '\"id\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); "
-                    "if [ -n \"$RELID\" ]; then curl -L -s -o %s \"https://coverartarchive.org/release/$RELID/front\"; fi; fi",
+                char *quoted_artist = g_shell_quote(artist);
+                char *quoted_dest = g_shell_quote(cover_path);
+                char cmd[4096];
+                
+                snprintf(cmd, sizeof(cmd), 
+                    "URL=$(curl -sG --data-urlencode \"term=%s\" \"https://itunes.apple.com/search?entity=album&limit=1\" | grep -o '\"artworkUrl100\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4 | sed 's/100x100bb.jpg/600x600bb.jpg/'); "
+                    "if [ -n \"$URL\" ]; then curl -L -s -o %s \"$URL\"; fi", 
                     quoted_artist, quoted_dest);
                 
-                pid = fork();
+                pid_t pid = fork();
                 if (pid == 0) {
                     execlp("sh", "sh", "-c", cmd, (char *)NULL);
                     _exit(127);
@@ -586,10 +621,28 @@ static void handle_covers_and_tags(SongData *songdata) {
                     int status;
                     waitpid(pid, &status, 0);
                 }
+
+                if (exists_file(cover_path) != 1) {
+                    snprintf(cmd, sizeof(cmd),
+                        "MBID=$(curl -sG --data-urlencode \"query=artist:%s\" \"https://musicbrainz.org/ws/2/artist/?fmt=json\" | grep -o '\"id\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); "
+                        "if [ -n \"$MBID\" ]; then "
+                        "RELID=$(curl -s \"https://musicbrainz.org/ws/2/release?artist=$MBID&limit=1&fmt=json\" | grep -o '\"id\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); "
+                        "if [ -n \"$RELID\" ]; then curl -L -s -o %s \"https://coverartarchive.org/release/$RELID/front\"; fi; fi",
+                        quoted_artist, quoted_dest);
+                    
+                    pid = fork();
+                    if (pid == 0) {
+                        execlp("sh", "sh", "-c", cmd, (char *)NULL);
+                        _exit(127);
+                    } else if (pid > 0) {
+                        int status;
+                        waitpid(pid, &status, 0);
+                    }
+                }
+                
+                g_free(quoted_artist);
+                g_free(quoted_dest);
             }
-            
-            g_free(quoted_artist);
-            g_free(quoted_dest);
         }
         
         if (exists_file(cover_path) == 1) {
