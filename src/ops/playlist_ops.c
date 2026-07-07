@@ -508,19 +508,22 @@ retry:
 
 void delete_from_lists(Node *node)
 {
+        if (node == NULL)
+                return;
+
         PlayList *playlist = get_playlist();
         PlayList *unshuffled_playlist = get_unshuffled_playlist();
 
-        if (node != NULL)
-                mark_as_dequeued(get_library(), node->song.file_path);
+        mark_as_dequeued(get_library(), node->song.file_path);
 
-        Node *node2 = find_selected_entry_by_id(playlist, node->id);
+        Node *node_unshuffled = find_selected_entry_by_id(unshuffled_playlist, node->id);
+        Node *node_playlist = find_selected_entry_by_id(playlist, node->id);
 
-        if (node != NULL)
-                delete_from_list(unshuffled_playlist, node);
+        if (node_unshuffled != NULL)
+                delete_from_list(unshuffled_playlist, node_unshuffled);
 
-        if (node2 != NULL)
-                delete_from_list(playlist, node2);
+        if (node_playlist != NULL)
+                delete_from_list(playlist, node_playlist);
 }
 
 void remove_song(Node *node)
@@ -588,11 +591,12 @@ void handle_remove(int chosen_row)
 {
         Model *model = get_model();
         PlayList *unshuffled_playlist = get_unshuffled_playlist();
+        PlayList *playlist = get_playlist();
         Node *node = NULL;
 
         if (model->state.currentView == PLAYLIST_VIEW) {
                 Node *current = get_current_song();
-                node = find_selected_entry(unshuffled_playlist, chosen_row);
+                node = find_selected_entry(playlist, chosen_row);
                 if (current && node && node->id == current->id)
                 {
                         model->state.ui.resetPlaylistDisplay = true;
@@ -707,7 +711,7 @@ void move_song_up(int *chosen_row)
 
         bool rebuild = false;
 
-        Node *node = find_selected_entry(unshuffled_playlist, *chosen_row);
+        Node *node = find_selected_entry(playlist, *chosen_row);
 
         if (node == NULL) {
                 return;
@@ -737,10 +741,15 @@ void move_song_up(int *chosen_row)
                 }
         }
 
-        move_up_list(unshuffled_playlist, node, true);
+        Node *un_node = find_selected_entry_by_id(unshuffled_playlist, node->id);
+        if (un_node)
+                move_up_list(unshuffled_playlist, un_node, true);
+
         Node *pl_node = find_selected_entry_by_id(playlist, node->id);
 
-        if (!is_shuffle_enabled())
+        if (is_shuffle_enabled())
+                move_up_list(playlist, pl_node, true);
+        else
                 move_up_list(playlist, pl_node, false);
 
         *chosen_row = *chosen_row - 1;
@@ -775,7 +784,7 @@ void move_song_down(int *chosen_row)
 
         bool rebuild = false;
 
-        Node *node = find_selected_entry(unshuffled_playlist, *chosen_row);
+        Node *node = find_selected_entry(playlist, *chosen_row);
 
         Node *current = get_current_song();
 
@@ -808,11 +817,15 @@ void move_song_down(int *chosen_row)
                 }
         }
 
-        move_down_list(unshuffled_playlist, node, true);
+        Node *un_node = find_selected_entry_by_id(unshuffled_playlist, node->id);
+        if (un_node)
+                move_down_list(unshuffled_playlist, un_node, true);
 
         Node *pl_node = find_selected_entry_by_id(playlist, node->id);
 
-        if (!is_shuffle_enabled())
+        if (is_shuffle_enabled())
+                move_down_list(playlist, pl_node, true);
+        else
                 move_down_list(playlist, pl_node, false);
 
         *chosen_row = *chosen_row + 1;

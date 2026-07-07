@@ -474,12 +474,15 @@ void enqueue_song(FileSystemEntry *child)
         if (!child)
                 return;
 
+        PlayList *unshuffled_playlist = get_unshuffled_playlist();
+        if (find_path_in_playlist(child->full_path, unshuffled_playlist) != NULL)
+                return;
+
         int id = child->id;
 
         if (id <= 0)
                 id = increment_node_id();
 
-        PlayList *unshuffled_playlist = get_unshuffled_playlist();
         PlayList *playlist = get_playlist();
 
         Node *node = NULL;
@@ -491,7 +494,6 @@ void enqueue_song(FileSystemEntry *child)
         create_node(&node2, child->full_path, id);
         if (add_to_list(playlist, node2) == -1)
                 destroy_node(node2);
-
         child->is_enqueued = playlist->count;
 
         if (node->prev)

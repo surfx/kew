@@ -74,6 +74,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. */
 #include "ops/search_ops.h"
 #include "ops/track_manager.h"
 
+#include "data/playlist.h"
 #include "data/theme.h"
 
 #include "utils/file.h"
@@ -229,6 +230,13 @@ void kew_shutdown()
         set_path(model->settings.path);
         set_prefs(&model->settings, &(model->state.settings));
         save_favorites_playlist(model->settings.path, model->favorites_playlist);
+
+        char *configdir = get_config_path();
+        if (configdir) {
+                save_named_playlist(configdir, "kew_queue.m3u", model->unshuffled_playlist);
+                free(configdir);
+        }
+
         save_library();
 
         ui_destroy(model);
@@ -702,7 +710,23 @@ void init_default_state(void)
         PlayList *playlist = get_playlist();
         PlaybackState *ps = get_playback_state();
 
-        add_enqueued_songs_to_playlist(library, playlist);
+        char *configdir = get_config_path();
+        bool loaded_from_m3u = false;
+        
+        if (configdir) {
+                char queue_path[KEW_PATH_MAX];
+                snprintf(queue_path, sizeof(queue_path), "%s/kew_queue.m3u", configdir);
+                if (exists_file(queue_path) >= 0) {
+                        read_m3u_file(queue_path, playlist);
+                        mark_list_as_enqueued(library, playlist);
+                        loaded_from_m3u = true;
+                }
+                free(configdir);
+        }
+
+        if (!loaded_from_m3u) {
+                add_enqueued_songs_to_playlist(library, playlist);
+        }
 
         reset_list_after_dequeuing_playing_song();
 
@@ -1003,11 +1027,17 @@ int main(int argc, char *argv[])
         bool run_for_play_command_with_playlist = false;
 
         if (argc == 3 && (strcmp(argv[1], "path") == 0)) {
-                char de_expanded[KEW_PATH_MAX];
-                collapse_path(argv[2], de_expanded, KEW_PATH_MAX);
-                c_strcpy(model->settings.path, de_expanded, sizeof(model->settings.path));
-                set_path(model->settings.path);
-                exit(0);
+                char expanded[KEW_PATH_MAX];
+                char real[KEW_PATH_MAX];
+                if (expand_path(argv[2], expanded, KEW_PATH_MAX) == 0) {
+                        if (path_realpath(expanded, real)) {
+                                c_strcpy(model->settings.path, real, sizeof(model->settings.path));
+                                set_path(model->settings.path);
+                                exit(0);
+                        }
+                }
+                fprintf(stderr, "Error: Invalid path '%s'\n", argv[2]);
+                exit(1);
         } else if (argc >= 3 && (strcmp(argv[1], "play") == 0)) {
                 run_for_play_command_with_playlist = handle_play_command_playlist(&argc, argv);
         }

@@ -6,7 +6,8 @@
  * maps user actions to playback operations.
  */
 
-#include "control_ui.h"
+#include "ui/components.h"
+#include "ui/control_ui.h"
 
 #include "ops/playlist_ops.h"
 #include "ui/chroma.h"
@@ -355,61 +356,29 @@ void toggle_shuffle(Model *model)
         AppState *state = get_app_state();
         PlaybackState *ps = get_playback_state();
 
-        state->settings.shuffle_enabled = !is_shuffle_enabled();
-        set_shuffle_enabled(state->settings.shuffle_enabled);
+        state->settings.shuffle_enabled = true;
+        set_shuffle_enabled(true);
 
         Node *current = get_current_song();
 
-        if (state->settings.shuffle_enabled) {
+        if (model->playlist) {
+                pthread_mutex_lock(&(model->playlist->mutex));
 
-                if (model->playlist) {
-                        pthread_mutex_lock(&(model->playlist->mutex));
+                shuffle_playlist_starting_from_song(model->playlist, current);
+                
+                // Keep the unshuffled list in sync so we don't accidentally revert
+                deep_copy_list(model->playlist, &(model->unshuffled_playlist));
 
-                        shuffle_playlist_starting_from_song(model->playlist, current);
-
-                        pthread_mutex_unlock(&(model->playlist->mutex));
-                }
-
-                emit_boolean_property_changed("Shuffle", TRUE);
-
-        } else if (model->playlist && model->unshuffled_playlist) {
-
-                char *path = NULL;
-
-                if (model->playlist && model->unshuffled_playlist) {
-
-                        pthread_mutex_lock(&(model->playlist->mutex));
-
-                        int id = -1;
-                        if (current)
-                                id = current->id;
-
-                        current = NULL;
-
-                        deep_copy_list(model->unshuffled_playlist, &(model->playlist));
-
-                        if (id >= 0 && current == NULL)
-                                current = find_selected_entry_by_id(model->playlist, id);
-
-                        pthread_mutex_unlock(&(model->playlist->mutex));
-                }
-
-                if (current != NULL) {
-                        path = strdup(current->song.file_path);
-
-                        if (path != NULL) {
-                                set_current_song(find_path_in_playlist(path, model->playlist));
-                                free(path);
-                        }
-                }
-
-                emit_boolean_property_changed("Shuffle", FALSE);
+                pthread_mutex_unlock(&(model->playlist->mutex));
         }
+
+        emit_boolean_property_changed("Shuffle", TRUE);
 
         ps->loadedNextSong = false;
         set_next_song(NULL);
 
-        set_dirty(DIRTY_PLAYLIST | DIRTY_LIBRARY | DIRTY_FOOTER);
+        component_playlist_helper_update_view_state(model);
+        set_dirty(DIRTY_ALL);
 }
 
 bool can_refresh_player(void)

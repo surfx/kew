@@ -115,7 +115,7 @@ void set_music_path(void)
 
         // Music folder names in different languages
         const char *music_folder_names[] = {
-            "Music", "Música", "Musique", "Musik", "Musica", "Muziek",
+            "Music", "Música", "Músicas", "Musique", "Musik", "Musica", "Muziek",
             "Музыка", "音乐", "音楽", "음악", "موسيقى", "संगीत",
             "Müzik", "Musikk", "Μουσική", "Muzyka", "Hudba", "Musiikki",
             "Zene", "Muzică", "เพลง", "מוזיקה"};
@@ -155,7 +155,13 @@ void set_music_path(void)
                         }
 
                         if (choice[0] == '\n' || choice[0] == '\0') {
-                                c_strcpy(settings->path, path, sizeof(settings->path));
+                                char expanded[KEW_PATH_MAX];
+                                char real[KEW_PATH_MAX];
+                                expand_path(path, expanded, KEW_PATH_MAX);
+                                if (path_realpath(expanded, real)) {
+                                        c_strcpy(settings->path, real, sizeof(settings->path));
+                                        set_path(settings->path);
+                                }
                                 print_blank_spaces(indent);
                                 return;
                         } else {
@@ -190,8 +196,13 @@ void set_music_path(void)
 
         // Set the path if the chosen directory exists
         if (directory_exists(choice)) {
-                c_strcpy(settings->path, choice, sizeof(settings->path));
-                set_path(settings->path);
+                char expanded[KEW_PATH_MAX];
+                char real[KEW_PATH_MAX];
+                expand_path(choice, expanded, KEW_PATH_MAX);
+                if (path_realpath(expanded, real)) {
+                        c_strcpy(settings->path, real, sizeof(settings->path));
+                        set_path(settings->path);
+                }
 
                 found = 1;
         } else {

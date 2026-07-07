@@ -47,6 +47,8 @@ const char LAYOUT_FILE[] = "/layouts/current.layout";
 
 #define MAX_LINE 1024
 
+const char *get_default_music_folder(void);
+
 #define MAX_KEY_BINDINGS 200
 
 time_t last_time_app_ran;
@@ -659,6 +661,29 @@ void init_settings(AppSettings *settings)
         } else {
                 get_prefs(settings, &(state->settings));
                 get_config(settings, &(state->settings));
+        }
+
+        // Repair legacy relative paths in config
+        if (settings->path[0] != '\0' && settings->path[0] != '/') {
+                char expanded[KEW_PATH_MAX];
+                char real[KEW_PATH_MAX];
+                if (expand_path(settings->path, expanded, KEW_PATH_MAX) == 0) {
+                        if (path_realpath(expanded, real)) {
+                                const char *home = get_home_path();
+                                if (home && strcmp(real, home) == 0) {
+                                        // If it resolved to HOME, try to find a subfolder
+                                        const char *def = get_default_music_folder();
+                                        if (def && directory_exists(def)) {
+                                                c_strcpy(settings->path, def, sizeof(settings->path));
+                                        } else {
+                                                c_strcpy(settings->path, real, sizeof(settings->path));
+                                        }
+                                } else {
+                                        c_strcpy(settings->path, real, sizeof(settings->path));
+                                }
+                                set_path(settings->path);
+                        }
+                }
         }
 
         free(kewrc);
@@ -1710,7 +1735,17 @@ const char *get_default_music_folder(void)
         const char *home = get_home_path();
         if (home != NULL) {
                 static char music_path[KEW_PATH_MAX];
+                
                 snprintf(music_path, sizeof(music_path), "%s/Music", home);
+                if (directory_exists(music_path)) return music_path;
+
+                snprintf(music_path, sizeof(music_path), "%s/Música", home);
+                if (directory_exists(music_path)) return music_path;
+
+                snprintf(music_path, sizeof(music_path), "%s/Músicas", home);
+                if (directory_exists(music_path)) return music_path;
+
+                snprintf(music_path, sizeof(music_path), "%s/Music", home); // fallback
                 return music_path;
         } else {
                 return NULL; // Return NULL if XDG home is not found.
@@ -2441,6 +2476,8 @@ int update_rc(const char *path, const char *key, const char *value)
                         *eq = '\0';
                         char *existing_key = line;
                         char *existing_value = eq + 1;
+                        
+                        trim(existing_key, strlen(existing_key));
 
                         if (strcmp(existing_key, key) == 0) {
                                 // Replace value
@@ -2453,9 +2490,10 @@ int update_rc(const char *path, const char *key, const char *value)
                                 snprintf(newline, needed, "%s=%s", key, value);
                                 found = 1;
                         } else {
-                                // Keep original line
-                                newline = malloc(strlen(line) + strlen(existing_value) + 2);
-                                snprintf(newline, strlen(line) + strlen(existing_value) + 2, "%s=%s", existing_key, existing_value);
+                                // Keep original line (reconstructing it to be safe)
+                                size_t needed = strlen(existing_key) + strlen(existing_value) + 2;
+                                newline = malloc(needed);
+                                snprintf(newline, needed, "%s=%s", existing_key, existing_value);
                         }
                 } else {
                         // Line without '=' or empty line
