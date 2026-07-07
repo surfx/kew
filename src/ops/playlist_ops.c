@@ -128,6 +128,8 @@ void remove_currently_playing_song(void)
         }
         ps->waitingForNext = true;
         current = NULL;
+
+        save_queue();
 }
 
 void rebuild_next_song(Node *song)
@@ -242,6 +244,18 @@ void clear_playlist(void)
             state->currentView == LIBRARY_VIEW ||
             state->settings.clearListClearsAll) {
                 set_dirty(DIRTY_ALL);
+        }
+
+        save_queue();
+}
+
+void save_queue(void)
+{
+        char *configdir = get_config_path();
+        if (configdir != NULL) {
+                PlayList *unshuffled_playlist = get_unshuffled_playlist();
+                save_named_playlist(configdir, "kew_queue.m3u", unshuffled_playlist);
+                free(configdir);
         }
 }
 
@@ -585,6 +599,8 @@ void remove_song(Node *node)
 
         if (playlist->head == NULL)
                 ps->waitingForPlaylist = true;
+
+        save_queue();
 }
 
 void handle_remove(int chosen_row)
@@ -769,6 +785,8 @@ void move_song_up(int *chosen_row)
         pthread_mutex_unlock(&(playlist->mutex));
 
         set_dirty(DIRTY_PLAYLIST);
+
+        save_queue();
 }
 
 void move_song_down(int *chosen_row)
@@ -846,6 +864,8 @@ void move_song_down(int *chosen_row)
         pthread_mutex_unlock(&(playlist->mutex));
 
         set_dirty(DIRTY_PLAYLIST);
+
+        save_queue();
 }
 
 void reshuffle_playlist(void)

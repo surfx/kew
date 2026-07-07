@@ -420,4 +420,6 @@ void view_enqueue(bool play_immediately)
         model->songdata = get_current_song_data(model->songdata);
 
         atomic_store(&enqueueing, false);
+
+        save_queue();
 }

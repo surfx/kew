@@ -171,6 +171,11 @@ void set_current_song_to_next(void);
 void clear_playlist(void);
 
 /**
+ * @brief Saves the current queue to the config directory.
+ */
+void save_queue(void);
+
+/**
  * @brief Add the currently playing song to the favorites playlist.
  *
  * If the song is not already present, creates a new node and appends it
