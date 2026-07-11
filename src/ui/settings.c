@@ -1263,6 +1263,10 @@ void construct_app_settings(AppSettings *settings, KeyValuePair *pairs, int coun
                         snprintf(settings->currentSongSeconds,
                                  sizeof(settings->currentSongSeconds), "%s",
                                  pair->value);
+                } else if (strcmp(lowercase_key, "currentsongpath") == 0) {
+                        snprintf(settings->currentSongPath,
+                                 sizeof(settings->currentSongPath), "%s",
+                                 pair->value);
                 } else if (strcmp(lowercase_key, "fadequick") == 0) {
                         snprintf(settings->fade_quick, sizeof(settings->fade_quick),
                                  "%s", pair->value);
@@ -1861,6 +1865,9 @@ void load_settings_into_ui(AppSettings *settings, UISettings *ui)
         if (tmp > 0)
                 ui->currentSongId = tmp;
 
+        if (settings->currentSongPath[0] != '\0')
+                c_strcpy(ui->currentSongPath, settings->currentSongPath, sizeof(ui->currentSongPath));
+
         tmp = get_number(settings->repeatState);
         if (tmp >= 0)
                 set_repeat_state(tmp);
@@ -2068,8 +2075,13 @@ void set_prefs(AppSettings *settings, UISettings *ui)
         // Save current song id and seconds for auto-resume
         if (current) {
                 FileSystemEntry *entry = find_corresponding_entry(model->library, current->song.file_path);
-                fprintf(file, "currentSongId=%d\n", entry->id);
+                if (entry)
+                        fprintf(file, "currentSongId=%d\n", entry->id);
+                else
+                        fprintf(file, "currentSongId=%d\n", current->id);
+
                 fprintf(file, "currentSongSeconds=%f\n", model->elapsed_seconds);
+                fprintf(file, "currentSongPath=%s\n", current->song.file_path);
         }
 
         fclose(file);

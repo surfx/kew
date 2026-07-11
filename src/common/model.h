@@ -399,6 +399,7 @@ typedef struct
 
         double currentSongSeconds;
         int currentSongId;
+        char currentSongPath[KEW_PATH_MAX];
         int auto_resume;
 
         int always_crossfade;
@@ -655,6 +656,7 @@ typedef struct
         char progressBarCurrentOddChar[12];
         char currentSongId[12];
         char currentSongSeconds[12];
+        char currentSongPath[KEW_PATH_MAX];
         char visualizer_bar_width[2];
         char replayGainCheckFirst[2];
         char saveRepeatShuffleSettings[2];

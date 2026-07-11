@@ -488,6 +488,9 @@ void auto_resume(double *seconds)
         Node *song = NULL;
         find_node_in_list(playlist, model->state.settings.currentSongId, &song);
 
+        if (!song && model->state.settings.currentSongPath[0] != '\0')
+                song = find_path_in_playlist(model->state.settings.currentSongPath, playlist);
+
         if (song) {
                 set_song_to_start_from(song);
                 ps->waitingForNext = true;
@@ -536,10 +539,8 @@ void run(bool start_playing)
 
         double seconds = 0.0;
         if (!start_playing) {
-
                 set_dirty(DIRTY_ALL);
-
-                if (model->state.settings.currentSongId > 0 && model->state.settings.auto_resume) {
+                if ((model->state.settings.currentSongId > 0 || model->state.settings.currentSongPath[0] != '\0') && model->state.settings.auto_resume) {
                         auto_resume(&seconds);
                 }
         }

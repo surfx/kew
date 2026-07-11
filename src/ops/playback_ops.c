@@ -24,6 +24,8 @@
 #include "sys/sys_integration.h"
 #include "sys/mpris.h"
 
+#include "ui/settings.h"
+
 #include "utils/utils.h"
 
 void resume_playback(double seconds)
@@ -67,6 +69,8 @@ void pause_song(void)
         if (model->state.currentView != TRACK_VIEW) {
                 set_dirty(DIRTY_ALL);
         }
+
+        set_prefs(&model->settings, &(model->state.settings));
 }
 
 void skip_to_begginning_of_song(void)
@@ -188,6 +192,9 @@ int play_song(Node *node)
         reset_clock();
         skip();
 
+        Model *model = get_model();
+        set_prefs(&model->settings, &(model->state.settings));
+
         return 0;
 }
 
@@ -265,6 +272,8 @@ void ops_toggle_pause(void)
                 emit_playback_paused();
                 update_pause_time();
                 set_dirty(DIRTY_VISUALIZER | DIRTY_FOOTER);
+                Model *model = get_model();
+                set_prefs(&model->settings, &(model->state.settings));
         } else {
                 if (ps->hasSilentlySwitched && !ps->skipping) {
                         set_total_pause_seconds(0);
