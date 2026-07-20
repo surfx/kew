@@ -1538,6 +1538,26 @@ int extractTags(const char *input_file, TagSettings *tag_settings,
                  sizeof(tag_settings->title) - 1);
         tag_settings->title[sizeof(tag_settings->title) - 1] = '\0';
 
+        // Copy the artist
+        c_strcpy(tag_settings->artist,
+                 tag->artist().toCString(true),
+                 sizeof(tag_settings->artist) - 1);
+        tag_settings->artist[sizeof(tag_settings->artist) - 1] = '\0';
+
+        // Copy the album
+        c_strcpy(tag_settings->album,
+                 tag->album().toCString(true),
+                 sizeof(tag_settings->album) - 1);
+        tag_settings->album[sizeof(tag_settings->album) - 1] = '\0';
+
+        // Copy the year as date
+        snprintf(tag_settings->date, sizeof(tag_settings->date),
+                 "%d", (int)tag->year());
+
+        if (tag_settings->date[0] == '0') {
+                tag_settings->date[0] = '\0';
+        }
+
         // Check if the title is empty, and if so, use the file path to
         // generate a title
         if (strnlen(tag_settings->title, 10) == 0) {
@@ -1547,28 +1567,6 @@ int extractTags(const char *input_file, TagSettings *tag_settings,
                          sizeof(tag_settings->title) - 1);
                 tag_settings->title[sizeof(tag_settings->title) - 1] =
                     '\0';
-        } else {
-                // Copy the artist
-                c_strcpy(tag_settings->artist,
-                         tag->artist().toCString(true),
-                         sizeof(tag_settings->artist) - 1);
-                tag_settings->artist[sizeof(tag_settings->artist) - 1] =
-                    '\0';
-
-                // Copy the album
-                c_strcpy(tag_settings->album,
-                         tag->album().toCString(true),
-                         sizeof(tag_settings->album) - 1);
-                tag_settings->album[sizeof(tag_settings->album) - 1] =
-                    '\0';
-
-                // Copy the year as date
-                snprintf(tag_settings->date, sizeof(tag_settings->date),
-                         "%d", (int)tag->year());
-
-                if (tag_settings->date[0] == '0') {
-                        tag_settings->date[0] = '\0';
-                }
         }
 
         if (*lyrics == nullptr) {
