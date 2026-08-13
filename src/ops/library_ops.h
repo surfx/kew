@@ -81,6 +81,13 @@ void mark_list_as_enqueued(FileSystemEntry *root, PlayList *playlist);
 void enqueue_song(FileSystemEntry *child);
 
 /**
+ * @brief Toggles recursive enqueuing for a directory entry.
+ *
+ * @param entry The directory entry to toggle.
+ */
+void toggle_recursive_enqueuing(FileSystemEntry *entry);
+
+/**
  * @brief Saves the current state of the media library.
  *
  * This function persists the current media library state, saving any changes made
@@ -103,24 +110,13 @@ void dequeue_song(FileSystemEntry *child);
  *
  * Traverses all descendants of the given directory entry and removes
  * each song from the playlists. Updates parent enqueued states accordingly.
- *
  * @param parent Directory whose children should be dequeued.
  */
-void dequeue_children(FileSystemEntry *parent);
+ void dequeue_children(FileSystemEntry *parent);
 
-/**
- * @brief Update parent enqueued states based on children.
- *
- * Recursively propagates the desired enqueued status up the directory tree,
- * ensuring that parent directories reflect the state of their children.
- *
- * @param parent The parent entry to update.
- * @param wanted_status The desired enqueued status.
- */
-void set_childrens_queued_status_on_parents(FileSystemEntry *parent, bool wanted_status);
-
-/**
+ /**
  * @brief Enqueues all music file siblings of a file in order according to track number
+
  *
  * Walks along the list of siblings and checks they are music files, then adds them to an array
  * Array is then sorted and enqueued

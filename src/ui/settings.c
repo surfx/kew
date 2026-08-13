@@ -62,7 +62,7 @@ typedef struct
 } KeyMap;
 
 TBKeyBinding key_bindings[MAX_KEY_BINDINGS] = {
-    {TB_KEY_SPACE, 0, 0, MSG_PLAY_PAUSE, ""},
+    {TB_KEY_SPACE, 0, 0, MSG_TOGGLE_RECURSIVE, ""},
     // Basic navigation
     {TB_KEY_TAB, 0, TB_MOD_SHIFT, MSG_PREVVIEW, ""},
     {TB_KEY_TAB, 0, 0, MSG_NEXTVIEW, ""},

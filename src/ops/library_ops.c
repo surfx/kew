@@ -64,35 +64,33 @@ void sort_library(void)
 
 int mark_as_enqueued(FileSystemEntry *root, char *path, int list_row_num)
 {
-        if (root == NULL)
-                return 0;
-
-        if (path == NULL)
+        if (root == NULL || path == NULL)
                 return 0;
 
         if (list_row_num == 0)
                 list_row_num = 1;
 
-        if (!root->is_directory) {
-                if (strcmp(root->full_path, path) == 0) {
+        if (strcmp(root->full_path, path) == 0) {
+                if (root->is_directory) {
+                        root->is_enqueued = -2;
+                } else {
                         root->is_enqueued = list_row_num;
-                        return root->id;
                 }
-        } else {
+                return root->id;
+        }
+
+        if (root->is_directory) {
                 FileSystemEntry *child = root->children;
-                int found = 0;
                 while (child != NULL) {
-                        found = mark_as_enqueued(child, path, list_row_num);
+                        int found = mark_as_enqueued(child, path, list_row_num);
+                        if (found) {
+                                // If a child was found, mark parent as enqueued (1) if not already -2
+                                if (child->is_enqueued != 0 && root->is_enqueued == 0) {
+                                        root->is_enqueued = 1;
+                                }
+                                return found;
+                        }
                         child = child->next;
-
-                        if (found)
-                                break;
-                }
-
-                if (found) {
-                        root->is_enqueued = list_row_num;
-
-                        return found;
                 }
         }
 
@@ -190,6 +188,19 @@ typedef struct
         Model *model;
 } UpdateLibraryArgs;
 
+static void auto_enqueue_new_songs(FileSystemEntry *node)
+{
+        if (node == NULL)
+                return;
+
+        if (!node->is_directory && node->is_enqueued != 0 && !is_m3u_file(node)) {
+                enqueue_song(node);
+        }
+
+        for (FileSystemEntry *child = node->children; child; child = child->next)
+                auto_enqueue_new_songs(child);
+}
+
 void *update_library_thread(void *arg)
 {
         UpdateLibraryArgs *args = arg;
@@ -234,6 +245,10 @@ void *update_library_thread(void *arg)
         model->library_updated = true;
 
         model->state.ui.numDirectoryTreeEntries = tmp_directory_tree_entries;
+
+        auto_enqueue_new_songs(tmp);
+
+        save_library();
 
         free_tree(old);
 
@@ -506,35 +521,6 @@ void enqueue_song(FileSystemEntry *child)
                 if (prev_entry)
                         child->is_enqueued = prev_entry->is_enqueued + 1;
         }
-
-        child->parent->is_enqueued = 1;
-}
-
-void set_childrens_queued_status_on_parents(FileSystemEntry *parent, bool wanted_status)
-{
-        if (parent == NULL)
-                return;
-
-        bool is_enqueued = false;
-
-        FileSystemEntry *ch = parent->children;
-
-        while (ch != NULL) {
-                if (ch->is_enqueued && !is_m3u_file(ch)) {
-                        is_enqueued = true;
-                        break;
-                }
-                ch = ch->next;
-        }
-
-        if (is_enqueued == wanted_status) {
-                parent->is_enqueued = wanted_status;
-        }
-
-        parent = parent->parent;
-
-        if (parent && parent->parent != NULL)
-                set_childrens_queued_status_on_parents(parent, wanted_status);
 }
 
 void dequeue_song(FileSystemEntry *child)
@@ -592,8 +578,33 @@ void dequeue_children(FileSystemEntry *parent)
 
                 child = child->next;
         }
+}
 
-        set_childrens_queued_status_on_parents(parent, false);
+void toggle_recursive_enqueuing(FileSystemEntry *entry)
+{
+        if (entry == NULL)
+                return;
+
+        if (entry->is_directory) {
+                if (entry->is_enqueued == -2) {
+                        entry->is_enqueued = 0;
+                        dequeue_children(entry);
+                } else {
+                        entry->is_enqueued = -2;
+                        FileSystemEntry *first_enqueued = NULL;
+                        enqueue_children(entry->children, &first_enqueued, true);
+                }
+        } else {
+                if (entry->is_enqueued > 0) {
+                        entry->is_enqueued = 0;
+                        dequeue_song(entry);
+                } else {
+                        enqueue_song(entry);
+                }
+        }
+
+        save_library();
+        save_queue();
 }
 
 int enqueue_album(FileSystemEntry *firstChild, FileSystemEntry **first_enqueued)
@@ -671,8 +682,6 @@ int enqueue_children(FileSystemEntry *child,
 
                 child = child->next;
         }
-
-        set_childrens_queued_status_on_parents(parent, true);
 
         return has_enqueued;
 }

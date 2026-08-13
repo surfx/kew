@@ -36,6 +36,24 @@ const char *LOGO[] =  {"  __",
 
 bool found_last_parent = false;
 
+static bool is_entry_enqueued(const FileSystemEntry *entry)
+{
+        if (entry == NULL)
+                return false;
+
+        if (entry->is_enqueued != 0)
+                return true;
+
+        const FileSystemEntry *p = entry->parent;
+        while (p != NULL) {
+                if (p->is_enqueued == -2)
+                        return true;
+                p = p->parent;
+        }
+
+        return false;
+}
+
 void prepare_playlist_string(Node *node, char *buffer, int buffer_size)
 {
         if (node == NULL || buffer == NULL || node->song.file_path == NULL ||
@@ -74,9 +92,11 @@ static void draw_search_row(DrawBuffer *buf, int row, int col, int width,
 {
         ColorValue tc;
 
+        bool enqueued = is_entry_enqueued(entry);
+
         if (is_playing)
                 tc = ui->theme.search_playing;
-        else if (entry->is_enqueued)
+        else if (enqueued)
                 tc = ui->theme.search_enqueued;
         else if (entry->parent != NULL && entry->parent->parent == NULL)
                 tc = ui->theme.library_artist;
@@ -94,7 +114,7 @@ static void draw_search_row(DrawBuffer *buf, int row, int col, int width,
         CellStyle blank = cell_style_plain();
 
         int indent_col = col + extra_indent;
-        int reverse_col = is_chosen ? (indent_col + (entry->is_enqueued ? 1 : 2))
+        int reverse_col = is_chosen ? (indent_col + (enqueued ? 1 : 2))
                                     : (indent_col + 3);
 
         // Clear from col to reverse_col with blank
@@ -102,7 +122,7 @@ static void draw_search_row(DrawBuffer *buf, int row, int col, int width,
                                          reverse_col - col, blank);
 
         // Write the plain part of the prefix after indent
-        const char *prefix = entry->is_enqueued ? " * " : "   ";
+        const char *prefix = enqueued ? " * " : "   ";
         int plain_prefix_len = reverse_col - indent_col;
         char plain_part[8];
         snprintf(plain_part, sizeof(plain_part), "%.*s", plain_prefix_len, prefix);
@@ -524,10 +544,11 @@ static FileSystemEntry *component_library_helper_render_node(const Model *model,
                         draw_buffer_set_string(buf, draw_row, draw_col, empty_space, item_style);
 
                         char prefix[8];
+                        bool enqueued = is_entry_enqueued(entry);
                         snprintf(prefix, sizeof(prefix), "%s",
-                                 entry->is_enqueued ? " * " : "   ");
+                                 enqueued ? " * " : "   ");
 
-                        if (is_chosen && entry->is_enqueued)
+                        if (is_chosen && enqueued)
                                 item_style.attrs |= ATTR_REVERSE;
 
                         draw_buffer_set_string(buf, draw_row, draw_col + extra_indent, prefix, item_style);

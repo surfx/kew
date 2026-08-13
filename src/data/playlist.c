@@ -746,7 +746,7 @@ void make_playlist_name(const char *search, int max_size)
         }
 }
 
-Node *read_m3u_file(const char *filepath, PlayList *playlist)
+Node *read_m3u_file(const char *filepath, PlayList *playlist, FileSystemEntry *library)
 {
         GError *error = NULL;
         gchar *contents;
@@ -784,7 +784,20 @@ Node *read_m3u_file(const char *filepath, PlayList *playlist)
                         if (songPath == NULL)
                                 continue;
 
+                        if (library) {
+                                mark_as_enqueued(library, songPath, 1);
+                        }
+
+                        if (is_directory(songPath)) {
+                                build_playlist_recursive(songPath,
+                                                          AUDIO_EXTENSIONS,
+                                                          playlist);
+                                g_free(songPath);
+                                continue;
+                        }
+
                         if (exists_file(songPath) < 0) {
+
                                 g_free(songPath);
                                 continue;
                         }
@@ -911,7 +924,7 @@ int make_playlist(PlayList **playlist, int argc, char *argv[], bool exact_search
                         if (walker(expanded_path, searching, buf, allowed_extensions,
                                    search_type, exact_search, 0) == 0) {
                                 if (strcmp(argv[1], "list") == 0) {
-                                        read_m3u_file(buf, *playlist);
+                                        read_m3u_file(buf, *playlist, NULL);
                                 } else {
                                         pthread_mutex_lock(&((*playlist)->mutex));
 
@@ -1005,6 +1018,50 @@ void generate_m3_u_filename(const char *base_path, const char *file_path,
         }
 }
 
+static void write_entries_recursive(FILE *file, FileSystemEntry *node)
+{
+        if (node == NULL)
+                return;
+
+        if (node->is_enqueued == -2) {
+                fprintf(file, "%s\n", node->full_path);
+                return; // Don't recurse if the folder itself is enqueued
+        }
+
+        if (!node->is_directory && node->is_enqueued > 0) {
+                fprintf(file, "%s\n", node->full_path);
+        }
+
+        for (FileSystemEntry *child = node->children; child; child = child->next)
+                write_entries_recursive(file, child);
+}
+
+void write_folder_based_m3u(const char *filename, FileSystemEntry *library)
+{
+        if (!library)
+                return;
+
+        FILE *file;
+
+#ifdef _WIN32
+        wchar_t *wfilename = utf8_to_wide(filename);
+        if (!wfilename)
+                return;
+
+        file = _wfopen(wfilename, L"w");
+        free(wfilename);
+#else
+        file = fopen(filename, "w");
+#endif
+
+        if (file == NULL)
+                return;
+
+        write_entries_recursive(file, library);
+
+        fclose(file);
+}
+
 void write_m3u_file(const char *filename, const PlayList *playlist)
 {
         FILE *file;
@@ -1054,7 +1111,7 @@ void load_playlist(const char *directory, const char *playlist_name,
         }
 
         if (*playlist)
-                read_m3u_file(playlist_path, *playlist);
+                read_m3u_file(playlist_path, *playlist, get_library());
 }
 
 void load_favorites_playlist(const char *directory, PlayList **favorites_playlist)
@@ -1099,20 +1156,37 @@ void insert_at_position(PlayList *playlist, Node *node, int position)
         current->next = node;
 }
 
+static bool is_parent_recursively_enqueued(FileSystemEntry *node)
+{
+        FileSystemEntry *p = node->parent;
+        while (p != NULL) {
+                if (p->is_enqueued == -2)
+                        return true;
+                p = p->parent;
+        }
+        return false;
+}
+
 void add_enqueued_songs_to_playlist(FileSystemEntry *root, PlayList *playlist)
 {
         if (!root)
                 return;
 
         // Position in the playlist is determined by the enqueued variable
-        if (root->is_enqueued > 0 && root->is_directory == 0 && !is_m3u_file(root)) {
+        bool enqueued = (root->is_enqueued != 0) || is_parent_recursively_enqueued(root);
+
+        if (enqueued && root->is_directory == 0 && !is_m3u_file(root)) {
                 Node *node = malloc(sizeof(Node));
                 node->song.file_path = strdup(root->full_path);
                 node->id = root->id;
                 node->song.duration = 0.0;
                 node->prev = node->next = NULL;
 
-                insert_at_position(playlist, node, root->is_enqueued);
+                int pos = root->is_enqueued;
+                if (pos <= 0)
+                        pos = playlist->count + 1;
+
+                insert_at_position(playlist, node, pos);
                 playlist->count++;
         }
 
@@ -1146,7 +1220,11 @@ void save_named_playlist(const char *directory, const char *playlist_name,
         }
 
         if (playlist != NULL) {
-                write_m3u_file(playlist_path, playlist);
+                if (strcmp(playlist_name, "kew_queue.m3u") == 0) {
+                        write_folder_based_m3u(playlist_path, get_library());
+                } else {
+                        write_m3u_file(playlist_path, playlist);
+                }
         }
 }
 

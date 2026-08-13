@@ -693,6 +693,8 @@ void kew_init(bool set_library_enqueued_status)
         pthread_t scan_tid;
         pthread_create(&scan_tid, NULL, process_library_covers_thread, model);
         pthread_detach(scan_tid);
+
+        dispatch_msg((struct Msg){.type = MSG_UPDATELIBRARY});
 }
 
 /**
@@ -703,7 +705,7 @@ void kew_init(bool set_library_enqueued_status)
  */
 void init_default_state(void)
 {
-        bool set_library_enqueued_status = true;
+        bool set_library_enqueued_status = false;
         kew_init(set_library_enqueued_status);
 
         AppState *state = get_app_state();
@@ -711,22 +713,25 @@ void init_default_state(void)
         PlayList *playlist = get_playlist();
         PlaybackState *ps = get_playback_state();
 
+        // ABSOLUTE FORCE CLEAR: Deleting all existing nodes in memory
+        while (playlist->head) {
+             Node *tmp = playlist->head;
+             playlist->head = playlist->head->next;
+             free(tmp->song.file_path);
+             free(tmp);
+        }
+        playlist->head = playlist->tail = NULL;
+        playlist->count = 0;
+
         char *configdir = get_config_path();
-        bool loaded_from_m3u = false;
         
         if (configdir) {
                 char queue_path[KEW_PATH_MAX];
                 snprintf(queue_path, sizeof(queue_path), "%s/kew_queue.m3u", configdir);
                 if (exists_file(queue_path) >= 0) {
-                        read_m3u_file(queue_path, playlist);
-                        mark_list_as_enqueued(library, playlist);
-                        loaded_from_m3u = true;
+                        read_m3u_file(queue_path, playlist, library);
                 }
                 free(configdir);
-        }
-
-        if (!loaded_from_m3u) {
-                add_enqueued_songs_to_playlist(library, playlist);
         }
 
         reset_list_after_dequeuing_playing_song();

@@ -126,11 +126,13 @@ Node *enqueue_songs(FileSystemEntry *entry, FileSystemEntry **chosen_dir, bool d
                                                       check_songs_for_track_number(entry) // songs are already ordered if track number is in name
                                         );
                                         has_enqueued = enqueue_children(entry->children, &first_enqueued_entry, sort);
+                                        entry->is_enqueued = -2;
 
                                         ps->nextSongNeedsRebuilding = true;
                                 } else if (!dont_dequeue) {
 
                                         dequeue_children(entry);
+                                        entry->is_enqueued = 0;
 
                                         ps->nextSongNeedsRebuilding = true;
                                 }
@@ -154,7 +156,6 @@ Node *enqueue_songs(FileSystemEntry *entry, FileSystemEntry **chosen_dir, bool d
                                 first_enqueued_entry = entry;
 
                                 enqueue_song(entry);
-                                set_childrens_queued_status_on_parents(entry->parent, true);
 
                                 has_enqueued = true;
                         } else {
@@ -166,7 +167,6 @@ Node *enqueue_songs(FileSystemEntry *entry, FileSystemEntry **chosen_dir, bool d
                                 } else {
                                         first_enqueued_entry = entry;
                                 }
-                                set_childrens_queued_status_on_parents(entry->parent, false);
                         }
                 }
         }
@@ -421,5 +421,26 @@ void view_enqueue(bool play_immediately)
 
         atomic_store(&enqueueing, false);
 
+        save_queue();
+}
+
+void view_toggle_recursive(void)
+{
+        Model *model = get_model();
+        AppState *state = &model->state;
+        FileSystemEntry *entry = NULL;
+
+        if (state->currentView == LIBRARY_VIEW)
+                entry = state->ui.current_lib_entry;
+        else if (state->currentView == SEARCH_VIEW)
+                entry = state->ui.current_search_entry;
+
+        if (entry == NULL)
+                return;
+
+        toggle_recursive_enqueuing(entry);
+
+        set_dirty(DIRTY_LIBRARY | DIRTY_SEARCH | DIRTY_PLAYLIST);
+        component_library_helper_update_view_state(model);
         save_queue();
 }

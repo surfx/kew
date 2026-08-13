@@ -313,6 +313,10 @@ void run_command(UpdateResult result)
                 break;
         }
 
+        case CMD_VIEW_TOGGLE_RECURSIVE:
+                view_toggle_recursive();
+                break;
+
         case CMD_REMOVE:
                 handle_remove(model->state.ui.chosen_row);
                 reset_list_after_dequeuing_playing_song();

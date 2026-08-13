@@ -601,6 +601,10 @@ UpdateResult update(Model *model, struct Msg *msg)
                 result.cmd.type = CMD_UPDATE_LIBRARY;
                 break;
 
+        case MSG_TOGGLE_RECURSIVE:
+                result.cmd.type = CMD_VIEW_TOGGLE_RECURSIVE;
+                break;
+
         case MSG_NEXT_PAGE:
                 flip_next_page(model);
                 component_library_helper_update_view_state(model);

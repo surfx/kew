@@ -1250,22 +1250,27 @@ bool is_m3u_file(const FileSystemEntry *entry)
         return is_m3u(entry->full_path);
 }
 
-void copy_is_enqueued(FileSystemEntry *library, FileSystemEntry *tmp)
+static void copy_is_enqueued_recursive(FileSystemEntry *old_root, FileSystemEntry *new_node)
 {
-        if (library == NULL)
+        if (new_node == NULL)
                 return;
 
-        if (library->is_enqueued) {
-                FileSystemEntry *tmp_entry =
-                    find_corresponding_entry(tmp, library->full_path);
-                if (tmp_entry != NULL) {
-                        tmp_entry->is_enqueued = library->is_enqueued;
-                }
+        FileSystemEntry *old_node = find_corresponding_entry(old_root, new_node->full_path);
+
+        if (old_node) {
+                new_node->is_enqueued = old_node->is_enqueued;
+        } else if (new_node->parent && new_node->parent->is_enqueued == -2) {
+                // New node in a recursively enqueued folder
+                new_node->is_enqueued = -2;
         }
 
-        copy_is_enqueued(library->children, tmp);
+        for (FileSystemEntry *child = new_node->children; child; child = child->next)
+                copy_is_enqueued_recursive(old_root, child);
+}
 
-        copy_is_enqueued(library->next, tmp);
+void copy_is_enqueued(FileSystemEntry *library, FileSystemEntry *tmp)
+{
+        copy_is_enqueued_recursive(library, tmp);
 }
 
 int compare_folders_by_age_files_alphabetically(const void *a, const void *b)

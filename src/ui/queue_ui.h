@@ -80,3 +80,8 @@ Node *enqueue_songs(FileSystemEntry *entry, FileSystemEntry **chosen_dir, bool d
  * @return First Node added to the playlist, or NULL when dequeuing.
  */
 Node *enqueue_playlist(FileSystemEntry *entry, bool dont_dequeue);
+
+/**
+ * @brief Toggles recursive enqueuing for the currently selected folder or song.
+ */
+void view_toggle_recursive(void);

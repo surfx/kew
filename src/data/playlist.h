@@ -193,7 +193,7 @@ void build_playlist_recursive(const char *directory_path,
  *
  * @note Skips duplicate entries already in the playlist.
  */
-Node *read_m3u_file(const char *filename, PlayList *playlist);
+Node *read_m3u_file(const char *filename, PlayList *playlist, FileSystemEntry *library);
 
 /**
  * @brief Creates a playlist based on command-line arguments and search rules.
@@ -219,6 +219,11 @@ int make_playlist(PlayList **playlist, int argc, char *argv[],
  * @param playlist Playlist to write.
  */
 void write_m3u_file(const char *filename, const PlayList *playlist);
+
+/**
+ * @brief Writes a folder-based M3U file.
+ */
+void write_folder_based_m3u(const char *filename, FileSystemEntry *library);
 
 /**
  * @brief Exports the current playlist to an M3U file.

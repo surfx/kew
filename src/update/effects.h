@@ -61,7 +61,8 @@ typedef enum {
         CMD_SORT_LIBRARY,
         CMD_VIEW_CHANGED,
         CMD_CROSSFADE,
-        CMD_TOGGLECROSSFADE
+        CMD_TOGGLECROSSFADE,
+        CMD_VIEW_TOGGLE_RECURSIVE
 
 } CmdType;
 
