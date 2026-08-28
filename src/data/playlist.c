@@ -20,6 +20,7 @@
 #include "ops/library_ops.h"
 
 #include "loader/tagLibWrapper.h"
+#include "ui/settings.h"
 #include "utils/file.h"
 #include "utils/utils.h"
 
@@ -51,6 +52,15 @@ void clear_current_song(void)
 void set_current_song(Node *node)
 {
         current_song = node;
+
+        // Persist the new current song immediately (instead of waiting for a
+        // graceful shutdown) so auto-resume state survives an abrupt exit,
+        // e.g. the terminal window being closed and the process killed
+        // before kew_shutdown() runs.
+        if (node != NULL) {
+                Model *model = get_model();
+                set_prefs(&model->settings, &(model->state.settings));
+        }
 }
 
 Node *get_current_song(void)
