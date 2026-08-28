@@ -249,6 +249,159 @@ void clear_playlist(void)
         save_queue();
 }
 
+bool is_playlist_filter_active(void)
+{
+        Model *model = get_model();
+        return model->playlist_filter_active;
+}
+
+void backup_playlist_before_filter(void)
+{
+        Model *model = get_model();
+
+        if (model->playlist_filter_active)
+                return; // Already backed up
+
+        deep_copy_list(get_unshuffled_playlist(), &model->filter_backup_unshuffled_playlist);
+        deep_copy_list(get_playlist(), &model->filter_backup_playlist);
+}
+
+void apply_search_filter_to_playlist(void)
+{
+        Model *model = get_model();
+
+        backup_playlist_before_filter();
+
+        PlayList *playlist = get_playlist();
+        PlayList *unshuffled_playlist = get_unshuffled_playlist();
+
+        Node *current = get_current_song();
+        int current_id = current ? current->id : -1;
+
+        pthread_mutex_lock(&(playlist->mutex));
+
+        // Remove every song except the one currently playing, it keeps playing undisturbed
+        Node *node = unshuffled_playlist->head;
+        while (node != NULL) {
+                Node *next = node->next;
+                if (node->id != current_id)
+                        delete_from_list(unshuffled_playlist, node);
+                node = next;
+        }
+
+        node = playlist->head;
+        while (node != NULL) {
+                Node *next = node->next;
+                if (node->id != current_id)
+                        delete_from_list(playlist, node);
+                node = next;
+        }
+
+        // Repopulate both lists with the current search results (songs only)
+        for (int i = 0; i < model->state.ui.search_results_count; i++) {
+                FileSystemEntry *entry = model->search_results[i].entry;
+
+                if (entry == NULL || entry->is_directory)
+                        continue;
+
+                if (find_path_in_playlist(entry->full_path, unshuffled_playlist) != NULL)
+                        continue; // Already present (e.g. the currently playing song)
+
+                int id = entry->id > 0 ? entry->id : increment_node_id();
+
+                Node *node1 = NULL;
+                create_node(&node1, entry->full_path, id);
+                if (add_to_list(unshuffled_playlist, node1) == -1)
+                        destroy_node(node1);
+
+                Node *node2 = NULL;
+                create_node(&node2, entry->full_path, id);
+                if (add_to_list(playlist, node2) == -1)
+                        destroy_node(node2);
+        }
+
+        pthread_mutex_unlock(&(playlist->mutex));
+
+        model->playlist_filter_active = true;
+
+        PlaybackState *ps = get_playback_state();
+        ps->nextSongNeedsRebuilding = true;
+
+        set_dirty(DIRTY_ALL);
+}
+
+void restore_playlist_from_filter_backup(void)
+{
+        Model *model = get_model();
+
+        if (!model->playlist_filter_active)
+                return;
+
+        PlayList *playlist = get_playlist();
+        PlayList *unshuffled_playlist = get_unshuffled_playlist();
+
+        Node *current = get_current_song();
+        int current_id = current ? current->id : -1;
+
+        pthread_mutex_lock(&(playlist->mutex));
+
+        // Drop every filtered song except the one currently playing
+        Node *node = unshuffled_playlist->head;
+        while (node != NULL) {
+                Node *next = node->next;
+                if (node->id != current_id)
+                        delete_from_list(unshuffled_playlist, node);
+                node = next;
+        }
+
+        node = playlist->head;
+        while (node != NULL) {
+                Node *next = node->next;
+                if (node->id != current_id)
+                        delete_from_list(playlist, node);
+                node = next;
+        }
+
+        // Re-add the backed up songs (the currently playing one is already present)
+        if (model->filter_backup_unshuffled_playlist) {
+                Node *backup_node = model->filter_backup_unshuffled_playlist->head;
+                while (backup_node != NULL) {
+                        if (backup_node->id != current_id) {
+                                Node *new_node = NULL;
+                                create_node(&new_node, backup_node->song.file_path, backup_node->id);
+                                if (add_to_list(unshuffled_playlist, new_node) == -1)
+                                        destroy_node(new_node);
+                        }
+                        backup_node = backup_node->next;
+                }
+        }
+
+        if (model->filter_backup_playlist) {
+                Node *backup_node = model->filter_backup_playlist->head;
+                while (backup_node != NULL) {
+                        if (backup_node->id != current_id) {
+                                Node *new_node = NULL;
+                                create_node(&new_node, backup_node->song.file_path, backup_node->id);
+                                if (add_to_list(playlist, new_node) == -1)
+                                        destroy_node(new_node);
+                        }
+                        backup_node = backup_node->next;
+                }
+        }
+
+        pthread_mutex_unlock(&(playlist->mutex));
+
+        free_playlist(&model->filter_backup_playlist);
+        free_playlist(&model->filter_backup_unshuffled_playlist);
+        model->playlist_filter_active = false;
+
+        PlaybackState *ps = get_playback_state();
+        ps->nextSongNeedsRebuilding = true;
+
+        set_dirty(DIRTY_ALL);
+        save_queue();
+}
+
 void save_queue(void)
 {
         char *configdir = get_config_path();

@@ -154,6 +154,10 @@ void init_model(void)
         model.unshuffled_playlist = NULL;
         model.favorites_playlist = NULL;
 
+        model.filter_backup_playlist = NULL;
+        model.filter_backup_unshuffled_playlist = NULL;
+        model.playlist_filter_active = false;
+
         model.library = NULL;
         model.songdata = NULL;
 

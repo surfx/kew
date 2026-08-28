@@ -402,6 +402,8 @@ typedef struct
         char currentSongPath[KEW_PATH_MAX];
         int auto_resume;
 
+        char playlistFilterText[MAX_SEARCH_LEN * 4 + 1]; /**< Last playlist filter text (F5 search), persisted between sessions. */
+
         int always_crossfade;
         int fade_enter_song_ms;
         int fade_quick_ms;
@@ -657,6 +659,7 @@ typedef struct
         char currentSongId[12];
         char currentSongSeconds[12];
         char currentSongPath[KEW_PATH_MAX];
+        char playlistFilterText[MAX_SEARCH_LEN * 4 + 1];
         char visualizer_bar_width[2];
         char replayGainCheckFirst[2];
         char saveRepeatShuffleSettings[2];
@@ -747,6 +750,12 @@ typedef struct Model {
         PlayList *playlist;
         PlayList *unshuffled_playlist;
         PlayList *favorites_playlist;
+
+        // Backups of the playlists taken before an F5 search filter is applied,
+        // used to restore the original playlist once the filter text is cleared.
+        PlayList *filter_backup_playlist;
+        PlayList *filter_backup_unshuffled_playlist;
+        bool playlist_filter_active;
 
         FileSystemEntry *library;
         volatile bool library_updated;

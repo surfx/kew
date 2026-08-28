@@ -14,6 +14,8 @@
 #include "data/directorytree.h"
 #include "data/playlist.h"
 
+#include "ops/playlist_ops.h"
+
 #include <stdbool.h>
 
 #define MAX_SEARCH_LEN 32
@@ -286,6 +288,13 @@ void fuzzy_search(char *search_term, FileSystemEntry *root, int threshold)
 
         sort_search_results();
 
+        // Live-filter the playlist: show the matches while typing, restore
+        // the original playlist once the filter text is cleared.
+        if (num_search_letters == 0)
+                restore_playlist_from_filter_backup();
+        else
+                apply_search_filter_to_playlist();
+
         set_dirty(DIRTY_SEARCH);
 }
 
@@ -332,6 +341,44 @@ int get_last_char_bytes(const char *str, int len)
                 i--;
         }
         return len - i;
+}
+
+void set_search_text_from_string(Model *model, const char *text)
+{
+        num_search_letters = 0;
+        num_search_bytes = 0;
+        model->state.ui.search_text[0] = '\0';
+
+        if (text == NULL)
+                return;
+
+        size_t len = strnlen(text, MAX_SEARCH_LEN * 4);
+        size_t i = 0;
+
+        while (i < len) {
+                int char_bytes = 1;
+                unsigned char c = (unsigned char)text[i];
+
+                if ((c & 0x80) == 0x00)
+                        char_bytes = 1;
+                else if ((c & 0xE0) == 0xC0)
+                        char_bytes = 2;
+                else if ((c & 0xF0) == 0xE0)
+                        char_bytes = 3;
+                else if ((c & 0xF8) == 0xF0)
+                        char_bytes = 4;
+
+                if (i + (size_t)char_bytes > len)
+                        char_bytes = (int)(len - i);
+
+                char buf[5] = {0};
+                for (int j = 0; j < char_bytes; j++)
+                        buf[j] = text[i + j];
+
+                add_to_search_text(model, buf);
+
+                i += (size_t)char_bytes;
+        }
 }
 
 int remove_from_search_text(Model *model)

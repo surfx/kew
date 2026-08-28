@@ -176,6 +176,43 @@ void clear_playlist(void);
 void save_queue(void);
 
 /**
+ * @brief Returns whether an F5 playlist search filter is currently applied.
+ *
+ * @return true if the playlist is currently showing filtered search
+ *         results, false if it reflects the unfiltered queue.
+ */
+bool is_playlist_filter_active(void);
+
+/**
+ * @brief Backs up the current playlist and unshuffled playlist.
+ *
+ * Called before a search filter is first applied so the original
+ * playlist contents can later be restored. Does nothing if a backup
+ * already exists (i.e. a filter is already active).
+ */
+void backup_playlist_before_filter(void);
+
+/**
+ * @brief Replaces the live playlist with the current search results.
+ *
+ * Removes every song from the playlist and unshuffled playlist except
+ * the currently playing one (which keeps playing undisturbed), then
+ * repopulates both lists with the songs found in the model's current
+ * search results. Backs up the original playlist first if needed.
+ */
+void apply_search_filter_to_playlist(void);
+
+/**
+ * @brief Restores the playlist to its state before filtering began.
+ *
+ * Reinstates the songs from the backup taken by
+ * backup_playlist_before_filter(), leaving the currently playing song
+ * untouched, and clears the stored backup. Does nothing if no filter
+ * is currently active.
+ */
+void restore_playlist_from_filter_backup(void);
+
+/**
  * @brief Add the currently playing song to the favorites playlist.
  *
  * If the song is not already present, creates a new node and appends it

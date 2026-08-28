@@ -1267,6 +1267,10 @@ void construct_app_settings(AppSettings *settings, KeyValuePair *pairs, int coun
                         snprintf(settings->currentSongPath,
                                  sizeof(settings->currentSongPath), "%s",
                                  pair->value);
+                } else if (strcmp(lowercase_key, "playlistfiltertext") == 0) {
+                        snprintf(settings->playlistFilterText,
+                                 sizeof(settings->playlistFilterText), "%s",
+                                 pair->value);
                 } else if (strcmp(lowercase_key, "fadequick") == 0) {
                         snprintf(settings->fade_quick, sizeof(settings->fade_quick),
                                  "%s", pair->value);
@@ -1868,6 +1872,8 @@ void load_settings_into_ui(AppSettings *settings, UISettings *ui)
         if (settings->currentSongPath[0] != '\0')
                 c_strcpy(ui->currentSongPath, settings->currentSongPath, sizeof(ui->currentSongPath));
 
+        c_strcpy(ui->playlistFilterText, settings->playlistFilterText, sizeof(ui->playlistFilterText));
+
         tmp = get_number(settings->repeatState);
         if (tmp >= 0)
                 set_repeat_state(tmp);
@@ -2083,6 +2089,8 @@ void set_prefs(AppSettings *settings, UISettings *ui)
                 fprintf(file, "currentSongSeconds=%f\n", model->elapsed_seconds);
                 fprintf(file, "currentSongPath=%s\n", current->song.file_path);
         }
+
+        fprintf(file, "playlistFilterText=%s\n", model->state.ui.search_text);
 
         fclose(file);
         free(configdir);

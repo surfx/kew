@@ -79,6 +79,18 @@ void fuzzy_search(char *search_term, FileSystemEntry *root, int threshold);
 FileSystemEntry *get_chosen_search_dir(void);
 
 /**
+ * @brief Sets the search text from a persisted string.
+ *
+ * Clears the current search text buffer and re-populates it character by
+ * character (respecting UTF-8 multi-byte sequences) so the internal letter
+ * count stays consistent, as if the user had typed the text.
+ *
+ * @param model
+ * @param text The text to restore into the search buffer. May be NULL.
+ */
+void set_search_text_from_string(Model *model, const char *text);
+
+/**
  * @brief Displays a search interface, including the search box and results.
  *
  * This function handles the display of the search box, clears the remaining line,

@@ -656,15 +656,13 @@ int enqueue_children(FileSystemEntry *child,
         if (!child)
                 return has_enqueued;
 
-        FileSystemEntry *parent = child->parent;
-
         while (child != NULL) {
                 if (child->is_directory) {
                         if (child->children != NULL) {
                                 child->is_enqueued = enqueue_children(child->children, first_enqueued_entry, sort);
 
-                                if (child->is_enqueued >= 1)
-                                        has_enqueued = 1;
+                                if (child->is_enqueued != 0)
+                                        has_enqueued = -2;
                         }
                 } else if (!is_m3u_file(child)) {
 
@@ -677,7 +675,7 @@ int enqueue_children(FileSystemEntry *child,
                                 if (!child->is_enqueued)
                                         enqueue_song(child);
 
-                        has_enqueued = 1;
+                        has_enqueued = -2;
                 }
 
                 child = child->next;

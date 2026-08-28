@@ -233,7 +233,12 @@ void kew_shutdown()
 
         char *configdir = get_config_path();
         if (configdir) {
-                save_named_playlist(configdir, "kew_queue.m3u", model->unshuffled_playlist);
+                // If a playlist filter (F5 search) is active, persist the original,
+                // unfiltered queue instead of the temporary filtered view.
+                PlayList *queue_to_save = model->playlist_filter_active
+                                              ? model->filter_backup_unshuffled_playlist
+                                              : model->unshuffled_playlist;
+                save_named_playlist(configdir, "kew_queue.m3u", queue_to_save);
                 free(configdir);
         }
 
@@ -491,12 +496,20 @@ void auto_resume(double *seconds)
         if (!song && model->state.settings.currentSongPath[0] != '\0')
                 song = find_path_in_playlist(model->state.settings.currentSongPath, playlist);
 
+        bool exact_match = song != NULL;
+
+        // The last played song may no longer be part of the (possibly
+        // filtered) playlist. Fall back to the first song that is, instead
+        // of silently failing to resume playback.
+        if (!song && playlist != NULL)
+                song = playlist->head;
+
         if (song) {
                 set_song_to_start_from(song);
                 ps->waitingForNext = true;
                 sound_system_set_end_of_list_reached(sound_sys, false);
 
-                if (model->state.settings.currentSongSeconds > 0.8) {
+                if (exact_match && model->state.settings.currentSongSeconds > 0.8) {
                         model->state.settings.currentSongSeconds -= 0.8;
                         *seconds = model->state.settings.currentSongSeconds;
                 }
@@ -526,6 +539,13 @@ void run(bool start_playing)
         PlaybackState *ps = &model->playbackState;
 
         deep_copy_list(playlist, &model->unshuffled_playlist);
+
+        // Reapply a playlist filter left over from a previous session (F5 search).
+        if (model->state.settings.playlistFilterText[0] != '\0') {
+                set_search_text_from_string(model, model->state.settings.playlistFilterText);
+                fuzzy_search(model->state.ui.search_text, get_library(), 100);
+                state->currentView = SEARCH_VIEW;
+        }
 
         if (state->settings.saveRepeatShuffleSettings) {
 

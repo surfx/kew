@@ -139,7 +139,8 @@ int enqueue_album(FileSystemEntry *firstChild,
  *                             enqueued FileSystemEntry, if any.
  * @param sort if true, sort by album, disc and track number
  *
- * @return 1 if at least one entry was enqueued, 0 otherwise.
+ * @return -2 if at least one entry was enqueued (matching the sentinel used
+ *         elsewhere to mark a directory as recursively enqueued), 0 otherwise.
  */
 int enqueue_children(FileSystemEntry *child,
                      FileSystemEntry **first_enqueued_entry,

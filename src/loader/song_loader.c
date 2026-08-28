@@ -562,8 +562,11 @@ static void handle_central_covers(SongData *songdata) {
 
     if (strlen(artist) > 0) {
         // Handle covers
-        char covers_dir[KEW_PATH_MAX];
-        char cover_path[KEW_PATH_MAX];
+        // Sized with headroom over KEW_PATH_MAX so appending ".covers", a
+        // path separator, and the (bounded) cover file name can never
+        // truncate, even if the source directory path is near KEW_PATH_MAX.
+        char covers_dir[KEW_PATH_MAX + 16];
+        char cover_path[KEW_PATH_MAX + METADATA_MAX_LENGTH * 2 + 32];
         char album_cover_name[METADATA_MAX_LENGTH * 2 + 4];
         bool found = false;
 

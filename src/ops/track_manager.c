@@ -26,6 +26,7 @@
 
 #include "ui/common_ui.h"
 #include "ui/components.h"
+#include "ui/settings.h"
 
 #include "utils/utils.h"
 
@@ -84,8 +85,9 @@ int load_first(Node *song)
                 ps->songHasErrors = false;
                 ps->loadedNextSong = false;
                 current = current->next;
-                load_song(song, true, false);
+                load_song(current, true, false);
         }
+
 
         if (ps->songHasErrors) {
                 // Couldn't play any of the songs
@@ -145,6 +147,7 @@ void determine_song_and_notify(void)
                 if (!isDeleted) {
                         notify_song_switch(current_song_data);
                 }
+                set_prefs(&model->settings, &(model->state.settings));
         } else
                 get_playback_state()->notifySwitch = true;
 }
@@ -243,6 +246,8 @@ int prepare_and_play_song(Node *song, double seconds)
         if (res >= 0 && !ps->songHasErrors) {
                 set_try_next_song(NULL);
                 resume_playback(seconds);
+                Model *model = get_model();
+                set_prefs(&model->settings, &(model->state.settings));
         }
 
         if (res < 0)
