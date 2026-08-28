@@ -2078,13 +2078,14 @@ void set_prefs(AppSettings *settings, UISettings *ui)
         Node *current = get_current_song();
         Model *model = get_model();
 
-        // Save current song id and seconds for auto-resume
+        // Save current song id and seconds for auto-resume.
+        // currentSongId must be the playlist Node id (not the library
+        // FileSystemEntry id), because auto_resume() in kew.c looks it up
+        // via find_node_in_list(), which matches against Node->id. Using a
+        // different id namespace here could coincidentally match an
+        // unrelated song in the freshly rebuilt playlist on next launch.
         if (current) {
-                FileSystemEntry *entry = find_corresponding_entry(model->library, current->song.file_path);
-                if (entry)
-                        fprintf(file, "currentSongId=%d\n", entry->id);
-                else
-                        fprintf(file, "currentSongId=%d\n", current->id);
+                fprintf(file, "currentSongId=%d\n", current->id);
 
                 fprintf(file, "currentSongSeconds=%f\n", model->elapsed_seconds);
                 fprintf(file, "currentSongPath=%s\n", current->song.file_path);
