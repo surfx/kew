@@ -86,6 +86,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. */
 #ifndef _WIN32
 #include <glib-unix.h>
 #endif
+#include <ctype.h>
 #include <glib.h>
 #include <libintl.h>
 #include <locale.h>
@@ -541,10 +542,24 @@ void run(bool start_playing)
         deep_copy_list(playlist, &model->unshuffled_playlist);
 
         // Reapply a playlist filter left over from a previous session (F5 search).
-        if (model->state.settings.playlistFilterText[0] != '\0') {
-                set_search_text_from_string(model, model->state.settings.playlistFilterText);
-                fuzzy_search(model->state.ui.search_text, get_library(), 100);
-                state->currentView = SEARCH_VIEW;
+        // A filter made up only of whitespace (or empty) is treated as "no
+        // filter": reapplying it would call apply_search_filter_to_playlist()
+        // with zero matches, which wipes out the whole restored queue.
+        {
+                const char *filter_text = model->state.settings.playlistFilterText;
+                bool has_non_space = false;
+                for (const char *p = filter_text; *p != '\0'; p++) {
+                        if (!isspace((unsigned char)*p)) {
+                                has_non_space = true;
+                                break;
+                        }
+                }
+
+                if (has_non_space) {
+                        set_search_text_from_string(model, filter_text);
+                        fuzzy_search(model->state.ui.search_text, get_library(), 100);
+                        state->currentView = SEARCH_VIEW;
+                }
         }
 
         if (state->settings.saveRepeatShuffleSettings) {
@@ -576,6 +591,16 @@ void run(bool start_playing)
 
         if (start_playing)
                 ps->waitingForPlaylist = true;
+
+        // If nothing has requested playback yet (e.g. default startup with a
+        // restored queue but no saved currentSongId/currentSongPath to
+        // auto-resume from), fall back to playing from the start of the
+        // playlist instead of silently staying idle on the library view.
+        if (playlist->count != 0 && !ps->waitingForPlaylist && !ps->waitingForNext) {
+                ps->waitingForPlaylist = true;
+                if (state->currentView == LIBRARY_VIEW)
+                        state->currentView = TRACK_VIEW;
+        }
 
         if (playlist->count != 0)
                 check_and_load_next_song(seconds);
@@ -757,7 +782,9 @@ void init_default_state(void)
         reset_list_after_dequeuing_playing_song();
 
         start_playing(true);
-        sound_system_set_end_of_list_reached(sound_sys, true);
+        // Only mark end-of-list when the restored queue is actually empty;
+        // otherwise this flag would block playback of a non-empty queue.
+        sound_system_set_end_of_list_reached(sound_sys, playlist->count == 0);
         ps->loadedNextSong = false;
 
         state->currentView = LIBRARY_VIEW;

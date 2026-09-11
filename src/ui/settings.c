@@ -2091,7 +2091,21 @@ void set_prefs(AppSettings *settings, UISettings *ui)
                 fprintf(file, "currentSongPath=%s\n", current->song.file_path);
         }
 
-        fprintf(file, "playlistFilterText=%s\n", model->state.ui.search_text);
+        // Only persist the playlist filter if it actually has meaningful
+        // (non-whitespace) content. Otherwise leave it blank so a stray
+        // space doesn't get reapplied and wipe the playlist next launch.
+        {
+                const char *search_text = model->state.ui.search_text;
+                bool has_non_space = false;
+                for (const char *p = search_text; *p != '\0'; p++) {
+                        if (!isspace((unsigned char)*p)) {
+                                has_non_space = true;
+                                break;
+                        }
+                }
+
+                fprintf(file, "playlistFilterText=%s\n", has_non_space ? search_text : "");
+        }
 
         fclose(file);
         free(configdir);
